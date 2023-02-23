@@ -22,8 +22,7 @@
  */
 public final class Harness {
 
-  private static Run processArgumentsWithRun(final String[] args) {
-
+  private static Run processArguments(final String[] args) {
     Run run = new Run(args[0]);
 
     if (args.length > 1) {
@@ -32,54 +31,29 @@ public final class Harness {
         run.setInnerIterations(Integer.valueOf(args[2]));
       }
     }
-  
 
     return run;
   }
 
-  private static RunWrite processArgumentsWithRunWrite(final String[] args) {
-
-  RunWrite runWrite = new RunWrite(args[0], args[1]);
-
-  if (args.length > 1) {
-    runWrite.setNumIterations(Integer.valueOf(args[1]));
-    if (args.length > 2) {
-      runWrite.setInnerIterations(Integer.valueOf(args[2]));
-    }
-  }
-
-
-  return runWrite;
-}
-
   private static void printUsage() {
     // Checkstyle: stop
-    System.out.println("Harness [benchmark] [num-iterations [inner-iter]] ?[Filename]");
+    System.out.println("Harness [benchmark] [num-iterations [inner-iter]]");
     System.out.println();
     System.out.println("  benchmark      - benchmark class name ");
     System.out.println("  num-iterations - number of times to execute benchmark, default: 1");
     System.out.println("  inner-iter     - number of times the benchmark is executed in an inner loop, ");
     System.out.println("                   which is measured in total, default: 1");
-    System.out.println("  Filename       - optional option for the name of the file you wish to write the final report too");
     // Checkstyle: resume
   }
 
   public static void main(final String[] args) {
-    if (args.length < 3) {
+    if (args.length < 2) {
       printUsage();
       System.exit(1);
     }
 
-    if (args.length == 3) {
-      RunWrite run = processArgumentsWithRunWrite(args);
-      run.runBenchmark();
-      run.printTotal();
-    }
-    else
-    {
-      Run run = processArgumentsWithRun(args);
-      run.runBenchmark();
-      run.printTotal();
-    }
+    Run run = processArguments(args);
+    run.runBenchmark();
+    run.printTotal();
   }
 }
