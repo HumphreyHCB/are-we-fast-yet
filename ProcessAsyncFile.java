@@ -8,7 +8,14 @@ import java.util.Scanner;
 public class ProcessAsyncFile {
 
     public static void main(String[] args) {
-        getTop5HottestMethods(args[0]);
+        String[][] top5 = getTop5HottestMethods(args[0]);
+
+        for (String[] strings : top5) {
+            System.out.println(strings[0]);            
+        }
+        for (String[] strings : top5) {
+            System.out.println(strings[1]);            
+        }
     }
     
     private static String[][] getTop5HottestMethods(String Filename) {
