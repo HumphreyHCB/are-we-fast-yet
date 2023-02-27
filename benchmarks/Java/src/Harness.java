@@ -1,3 +1,5 @@
+import java.util.Scanner;
+
 /* This code is based on the SOM class library.
  *
  * Copyright (c) 2001-2016 see AUTHORS.md file
@@ -23,6 +25,10 @@
 public final class Harness {
 
   private static Run processArguments(final String[] args) {
+
+    //System.out.print("Press any key to continue . . . ");
+    //new Scanner(System.in).nextLine();
+    
     Run run = new Run(args[0]);
 
     if (args.length > 1) {
