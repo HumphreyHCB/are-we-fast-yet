@@ -20,3 +20,18 @@ perf record -o Dumps/Perf/Json.data -- java -XX:+UnlockDiagnosticVMOptions -XX:+
 
 perf record -o Dumps/Perf/List.data -- java -XX:+UnlockDiagnosticVMOptions -XX:+DumpPerfMapAtExit -cp benchmarks/Java/benchmarks.jar Harness List 1000 1000
 
+perf record -o Dumps/Perf/Mandelbrot.data -- java -XX:+UnlockDiagnosticVMOptions -XX:+DumpPerfMapAtExit -cp benchmarks/Java/benchmarks.jar Harness Mandelbrot 1000 500
+
+perf record -o Dumps/Perf/NBody.data -- java -XX:+UnlockDiagnosticVMOptions -XX:+DumpPerfMapAtExit -cp benchmarks/Java/benchmarks.jar Harness NBody 1000 250000
+
+perf record -o Dumps/Perf/Permute.data -- java -XX:+UnlockDiagnosticVMOptions -XX:+DumpPerfMapAtExit -cp benchmarks/Java/benchmarks.jar Harness Permute 1000 1000
+
+perf record -o Dumps/Perf/Queens.data -- java -XX:+UnlockDiagnosticVMOptions -XX:+DumpPerfMapAtExit -cp benchmarks/Java/benchmarks.jar Harness Queens 1000 1000
+
+perf record -o Dumps/Perf/Richards.data -- java -XX:+UnlockDiagnosticVMOptions -XX:+DumpPerfMapAtExit -cp benchmarks/Java/benchmarks.jar Harness Richards 1000 1000
+
+perf record -o Dumps/Perf/Sieve.data -- java -XX:+UnlockDiagnosticVMOptions -XX:+DumpPerfMapAtExit -cp benchmarks/Java/benchmarks.jar Harness Sieve 1000 1000
+
+perf record -o Dumps/Perf/Storage.data -- java -XX:+UnlockDiagnosticVMOptions -XX:+DumpPerfMapAtExit -cp benchmarks/Java/benchmarks.jar Harness Storage 1000 1000
+
+perf record -o Dumps/Perf/Towers.data -- java -XX:+UnlockDiagnosticVMOptions -XX:+DumpPerfMapAtExit -cp benchmarks/Java/benchmarks.jar Harness Towers 1000 1000
