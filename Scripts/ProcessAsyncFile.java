@@ -1,3 +1,4 @@
+package Scripts;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.Scanner;
@@ -27,8 +28,15 @@ public class ProcessAsyncFile {
                 if (myReader.nextLine().equals("  ----------  -------  -------  ---")) {
                     for (int i = 0; i < 5; i++) {
                         String[] split = myReader.nextLine().split("\\s+");
-                        top5[i][0] = split[4];
-                        top5[i][1] = split[2];
+                        if(split[0] == "")
+                        {
+                            top5[i][0] = split[4];
+                            top5[i][1] = split[2];
+                        }
+                        else{
+                            top5[i][0] = split[3];
+                            top5[i][1] = split[1];
+                        }
                     }
                     break;
                 }
