@@ -70,24 +70,24 @@ public final class Run {
     // Checkstyle: resume
   }
 
-  private void measure(final Benchmark bench) {
+
+  private void measure(Benchmark bench, int iteration) {
     long startTime = System.nanoTime();
-    if (!bench.innerBenchmarkLoop(innerIterations)) {
-      throw new RuntimeException("Benchmark failed with incorrect result");
+    if (!bench.innerBenchmarkLoop(this.innerIterations)) {
+       throw new RuntimeException("Benchmark failed with incorrect result");
+    } else {
+       long endTime = System.nanoTime();
+       long runTime = (endTime - startTime) / 1000L;
+       this.printResult(runTime, iteration);
+       this.total += runTime;
     }
-    long endTime = System.nanoTime();
-    long runTime = (endTime - startTime) / 1000;
+ }
 
-    printResult(runTime);
-
-    total += runTime;
-  }
-
-  private void doRuns(final Benchmark bench) {
-    for (int i = 0; i < numIterations; i++) {
-      measure(bench);
+  private void doRuns(Benchmark bench) {
+    for (int i = 0; i < this.numIterations; ++i) {
+       this.measure(bench, i + 1);
     }
-  }
+ }
 
   private void reportBenchmark() {
     // Checkstyle: stop
@@ -96,11 +96,11 @@ public final class Run {
     // Checkstyle: resume
   }
 
-  private void printResult(final long runTime) {
+  private void printResult(long runTime, int iteration) {
     // Checkstyle: stop
-    System.out.println(name + ": iterations=1 runtime: " + runTime + "us");
+    System.out.println(this.name + ": iterations=" + iteration + " runtime: " + runTime + "us");
     // Checkstyle: resume
-  }
+ }
 
   public void printTotal() {
     // Checkstyle: stop
