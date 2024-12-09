@@ -35,88 +35,126 @@ public class Scheduler extends RBObject {
     taskList = NO_TASK;
   }
 
-
-  void createDevice(final int identity, final int priority,
-      final Packet workPacket, final TaskState state) {
-    DeviceTaskDataRecord data = new DeviceTaskDataRecord();
-
-    createTask(identity, priority, workPacket, state,
-       (final Packet workArg, final RBObject wordArg) -> {
-         DeviceTaskDataRecord dataRecord = (DeviceTaskDataRecord) wordArg;
-         Packet functionWork = workArg;
-         if (NO_WORK == functionWork) {
-           if (NO_WORK == (functionWork = dataRecord.getPending())) {
-             return markWaiting();
-           } else {
-             dataRecord.setPending(NO_WORK);
-             return queuePacket(functionWork);
-           }
-         } else {
-           dataRecord.setPending(functionWork);
-           if (TRACING) {
-             trace(functionWork.getDatum());
-           }
-           return holdSelf();
-         }},
-      data);
+  // DeviceProcessFunction
+  class DeviceProcessFunction extends ProcessFunction {
+    @Override
+    public TaskControlBlock apply(Packet workArg, RBObject wordArg) {
+      DeviceTaskDataRecord dataRecord = (DeviceTaskDataRecord) wordArg;
+      Packet functionWork = workArg;
+      if (NO_WORK == functionWork) {
+        if (NO_WORK == (functionWork = dataRecord.getPending())) {
+          return markWaiting();
+        } else {
+          dataRecord.setPending(NO_WORK);
+          return queuePacket(functionWork);
+        }
+      } else {
+        dataRecord.setPending(functionWork);
+        if (TRACING) {
+          trace(functionWork.getDatum());
+        }
+        return holdSelf();
+      }
+    }
   }
 
-  void createHandler(final int identity, final int priority,
-      final Packet workPaket, final TaskState state) {
-    HandlerTaskDataRecord data = new HandlerTaskDataRecord();
-    createTask(identity, priority, workPaket, state,
-        (final Packet work, final RBObject word) -> {
-          HandlerTaskDataRecord dataRecord = (HandlerTaskDataRecord) word;
-          if (NO_WORK != work) {
-            if (WORK_PACKET_KIND == work.getKind()) {
-              dataRecord.workInAdd(work);
-            } else {
-              dataRecord.deviceInAdd(work);
-            }
-          }
+  // HandlerProcessFunction
+  class HandlerProcessFunction extends ProcessFunction {
+    @Override
+    public TaskControlBlock apply(Packet work, RBObject word) {
+      HandlerTaskDataRecord dataRecord = (HandlerTaskDataRecord) word;
+      if (NO_WORK != work) {
+        if (WORK_PACKET_KIND == work.getKind()) {
+          dataRecord.workInAdd(work);
+        } else {
+          dataRecord.deviceInAdd(work);
+        }
+      }
 
-          Packet workPacket;
-          if (NO_WORK == (workPacket = dataRecord.workIn())) {
+      Packet workPacket;
+      if (NO_WORK == (workPacket = dataRecord.workIn())) {
+        return markWaiting();
+      } else {
+        int count = workPacket.getDatum();
+        if (count >= Packet.DATA_SIZE) {
+          dataRecord.workIn(workPacket.getLink());
+          return queuePacket(workPacket);
+        } else {
+          Packet devicePacket;
+          if (NO_WORK == (devicePacket = dataRecord.deviceIn())) {
             return markWaiting();
           } else {
-            int count = workPacket.getDatum();
-            if (count >= Packet.DATA_SIZE) {
-              dataRecord.workIn(workPacket.getLink());
-              return queuePacket(workPacket);
-            } else {
-              Packet devicePacket;
-              if (NO_WORK == (devicePacket = dataRecord.deviceIn())) {
-                return markWaiting();
-              } else {
-                dataRecord.deviceIn(devicePacket.getLink());
-                devicePacket.setDatum(workPacket.getData()[count]);
-                workPacket.setDatum(count + 1);
-                return queuePacket(devicePacket);
-              }
-            }
+            dataRecord.deviceIn(devicePacket.getLink());
+            devicePacket.setDatum(workPacket.getData()[count]);
+            workPacket.setDatum(count + 1);
+            return queuePacket(devicePacket);
           }
-      }, data);
+        }
+      }
+    }
   }
 
-  void createIdler(final int identity, final int priority, final Packet work,
-      final TaskState state) {
-        IdleTaskDataRecord data = new IdleTaskDataRecord();
-        createTask(identity, priority, work, state,
-            (final Packet workArg, final RBObject wordArg) -> {
-              IdleTaskDataRecord dataRecord = (IdleTaskDataRecord) wordArg;
-              dataRecord.setCount(dataRecord.getCount() - 1);
-              if (0 == dataRecord.getCount()) {
-                return holdSelf();
-              } else {
-                if (0 == (dataRecord.getControl() & 1)) {
-                  dataRecord.setControl(dataRecord.getControl() / 2);
-                  return release(DEVICE_A);
-                } else {
-                  dataRecord.setControl((dataRecord.getControl() / 2) ^ 53256);
-                  return release(DEVICE_B);
-                }
-              }
-            }, data);
+  // WorkerProcessFunction
+  class WorkerProcessFunction extends ProcessFunction {
+    @Override
+    public TaskControlBlock apply(Packet work, RBObject word) {
+      WorkerTaskDataRecord data = (WorkerTaskDataRecord) word;
+      if (NO_WORK == work) {
+        return markWaiting();
+      } else {
+        data.setDestination((HANDLER_A == data.getDestination()) ? HANDLER_B : HANDLER_A);
+        work.setIdentity(data.getDestination());
+        work.setDatum(0);
+        for (int i = 0; i < Packet.DATA_SIZE; i++) {
+          data.setCount(data.getCount() + 1);
+          if (data.getCount() > 26) {
+            data.setCount(1);
+          }
+          work.getData()[i] = 65 + data.getCount() - 1;
+        }
+        return queuePacket(work);
+      }
+    }
+  }
+
+  // IdleProcessFunction
+  class IdleProcessFunction extends ProcessFunction {
+    @Override
+    public TaskControlBlock apply(Packet workArg, RBObject wordArg) {
+      IdleTaskDataRecord dataRecord = (IdleTaskDataRecord) wordArg;
+      dataRecord.setCount(dataRecord.getCount() - 1);
+      if (0 == dataRecord.getCount()) {
+        return holdSelf();
+      } else {
+        if (0 == (dataRecord.getControl() & 1)) {
+          dataRecord.setControl(dataRecord.getControl() / 2);
+          return release(DEVICE_A);
+        } else {
+          dataRecord.setControl((dataRecord.getControl() / 2) ^ 53256);
+          return release(DEVICE_B);
+        }
+      }
+    }
+  }
+
+  void createDevice(final int identity, final int priority, final Packet workPacket, final TaskState state) {
+    DeviceTaskDataRecord data = new DeviceTaskDataRecord();
+    createTask(identity, priority, workPacket, state, new DeviceProcessFunction(), data);
+  }
+
+  void createHandler(final int identity, final int priority, final Packet workPaket, final TaskState state) {
+    HandlerTaskDataRecord data = new HandlerTaskDataRecord();
+    createTask(identity, priority, workPaket, state, new HandlerProcessFunction(), data);
+  }
+
+  void createIdler(final int identity, final int priority, final Packet work, final TaskState state) {
+    IdleTaskDataRecord data = new IdleTaskDataRecord();
+    createTask(identity, priority, work, state, new IdleProcessFunction(), data);
+  }
+
+  void createWorker(final int identity, final int priority, final Packet workPaket, final TaskState state) {
+    WorkerTaskDataRecord dataRecord = new WorkerTaskDataRecord();
+    createTask(identity, priority, workPaket, state, new WorkerProcessFunction(), dataRecord);
   }
 
   Packet createPacket(final Packet link, final int identity, final int kind) {
@@ -131,29 +169,6 @@ public class Scheduler extends RBObject {
         priority, work, state, aBlock, data);
     taskList = t;
     taskTable[identity] = t;
-  }
-
-  void createWorker(final int identity, final int priority,
-      final Packet workPaket, final TaskState state) {
-    WorkerTaskDataRecord dataRecord = new WorkerTaskDataRecord();
-    createTask(identity, priority, workPaket, state,
-
-        (final Packet work, final RBObject word) -> {
-          WorkerTaskDataRecord data = (WorkerTaskDataRecord) word;
-          if (NO_WORK == work) {
-            return markWaiting();
-          } else {
-            data.setDestination((HANDLER_A == data.getDestination()) ? HANDLER_B : HANDLER_A);
-            work.setIdentity(data.getDestination());
-            work.setDatum(0);
-            for (int i = 0; i < Packet.DATA_SIZE; i++) {
-              data.setCount(data.getCount() + 1);
-              if (data.getCount() > 26) { data.setCount(1); }
-              work.getData()[i] = 65 + data.getCount() - 1;
-            }
-            return queuePacket(work);
-          }
-        }, dataRecord);
   }
 
   public boolean start() {

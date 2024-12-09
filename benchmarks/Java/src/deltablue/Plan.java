@@ -8,17 +8,30 @@
  */
 package deltablue;
 
-import som.Vector;
+import java.util.Vector;
 
 // A Plan is an ordered list of constraints to be executed in sequence
 // to resatisfy all currently satisfiable constraints in the face of
 // one or more changing inputs.
-final class Plan extends Vector<AbstractConstraint> {
-  Plan() {
-    super(15);
+final class Plan {
+    private final Vector<AbstractConstraint> constraints;
+
+    Plan() {
+        this.constraints = new Vector<>(15); // Maintain initial capacity of 15
+    }
+
+    // Maintain compatibility by accepting Object
+    public void append(Object obj) {
+      if (obj instanceof AbstractConstraint) {
+          constraints.add((AbstractConstraint) obj);
+      } else {
+          throw new IllegalArgumentException("Only AbstractConstraint objects can be appended to Plan");
+      }
   }
 
-  public void execute() {
-    forEach(c -> c.execute());
-  }
+    public void execute() {
+        for (AbstractConstraint c : constraints) {
+            c.execute(); // Execute each constraint
+        }
+    }
 }

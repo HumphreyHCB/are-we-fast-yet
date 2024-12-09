@@ -1,5 +1,6 @@
 package cd;
 
+import som.ForEachInterface;
 import som.Vector;
 
 public final class CollisionDetector {
@@ -13,10 +14,12 @@ public final class CollisionDetector {
     Vector<Motion> motions = new Vector<>();
     RedBlackTree<CallSign, Boolean> seen = new RedBlackTree<>();
 
-    frame.forEach(aircraft -> {
-      Vector3D oldPosition = state.put(aircraft.callsign, aircraft.position);
-      Vector3D newPosition = aircraft.position;
-      seen.put(aircraft.callsign, true);
+        // Process the new frame
+        for (int i = 0; i < frame.size(); i++) {
+            Aircraft aircraft = frame.at(i);
+            Vector3D oldPosition = state.put(aircraft.callsign, aircraft.position);
+            Vector3D newPosition = aircraft.position;
+            seen.put(aircraft.callsign, true);
 
       if (oldPosition == null) {
         // Treat newly introduced aircraft as if they were stationary.
@@ -24,32 +27,33 @@ public final class CollisionDetector {
       }
 
       motions.append(new Motion(aircraft.callsign, oldPosition, newPosition));
-    });
+    }
 
-    // Remove aircraft that are no longer present.
+    // Remove aircraft that are no longer present
     Vector<CallSign> toRemove = new Vector<>();
-    state.forEach(e -> {
-      if (!seen.get(e.key)) {
-        toRemove.append(e.key);
-      }
-    });
+    state.forEach(new RemoveAbsentAircraft(seen, toRemove));
 
-    toRemove.forEach(e -> state.remove(e));
+        for (int i = 0; i < toRemove.size(); i++) {
+            state.remove(toRemove.at(i));
+        }
 
     Vector<Vector<Motion>> allReduced = reduceCollisionSet(motions);
     Vector<Collision> collisions = new Vector<>();
-    allReduced.forEach(reduced -> {
-      for (int i = 0; i < reduced.size(); ++i) {
-        Motion motion1 = reduced.at(i);
-        for (int j = i + 1; j < reduced.size(); ++j) {
-          Motion motion2 = reduced.at(j);
-          Vector3D collision = motion1.findIntersection(motion2);
-          if (collision != null) {
-            collisions.append(new Collision(motion1.callsign, motion2.callsign, collision));
-          }
+
+        // Detect collisions
+        for (int i = 0; i < allReduced.size(); i++) {
+            Vector<Motion> reduced = allReduced.at(i);
+            for (int j = 0; j < reduced.size(); j++) {
+                Motion motion1 = reduced.at(j);
+                for (int k = j + 1; k < reduced.size(); k++) {
+                    Motion motion2 = reduced.at(k);
+                    Vector3D collision = motion1.findIntersection(motion2);
+                    if (collision != null) {
+                        collisions.append(new Collision(motion1.callsign, motion2.callsign, collision));
+                    }
+                }
+            }
         }
-      }
-    });
 
     return collisions;
   }
@@ -146,14 +150,12 @@ public final class CollisionDetector {
 
   private static Vector<Vector<Motion>> reduceCollisionSet(final Vector<Motion> motions) {
     RedBlackTree<Vector2D, Vector<Motion>> voxelMap = new RedBlackTree<>();
-    motions.forEach(motion -> drawMotionOnVoxelMap(voxelMap, motion));
+    for (int i = 0; i < motions.size(); i++) {
+         drawMotionOnVoxelMap(voxelMap, motions.at(i));
+        }
 
     Vector<Vector<Motion>> result = new Vector<>();
-    voxelMap.forEach(e -> {
-      if (e.value.size() > 1) {
-        result.append(e.value);
-      }
-    });
+        voxelMap.forEach(new CollectCollisions(result));
     return result;
   }
 
@@ -177,6 +179,40 @@ public final class CollisionDetector {
   private static void drawMotionOnVoxelMap(
       final RedBlackTree<Vector2D, Vector<Motion>> voxelMap, final Motion motion) {
     RedBlackTree<Vector2D, Boolean> seen = new RedBlackTree<>();
-    recurse(voxelMap, seen, voxelHash(motion.posOne), motion);
-  }
+        recurse(voxelMap, seen, voxelHash(motion.posOne), motion);
+    }
+
+    // Work around for not using lamdas, use concrete methods
+    private static class RemoveAbsentAircraft implements ForEachInterface<RedBlackTree.Entry<CallSign, Vector3D>> {
+        private final RedBlackTree<CallSign, Boolean> seen;
+        private final Vector<CallSign> toRemove;
+
+        RemoveAbsentAircraft(RedBlackTree<CallSign, Boolean> seen, Vector<CallSign> toRemove) {
+            this.seen = seen;
+            this.toRemove = toRemove;
+        }
+
+        @Override
+        public void apply(RedBlackTree.Entry<CallSign, Vector3D> entry) {
+            if (!seen.get(entry.key)) {
+                toRemove.append(entry.key);
+            }
+        }
+    }
+
+    // Named class for collecting collisions
+    private static class CollectCollisions implements ForEachInterface<RedBlackTree.Entry<Vector2D, Vector<Motion>>> {
+        private final Vector<Vector<Motion>> result;
+
+        CollectCollisions(Vector<Vector<Motion>> result) {
+            this.result = result;
+        }
+
+        @Override
+        public void apply(RedBlackTree.Entry<Vector2D, Vector<Motion>> entry) {
+            if (entry.value.size() > 1) {
+                result.append(entry.value);
+            }
+        }
+    }
 }

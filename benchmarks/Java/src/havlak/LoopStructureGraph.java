@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 package havlak;
+import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.List;
 
 import som.Vector;
 
@@ -35,36 +38,34 @@ import som.Vector;
 final class LoopStructureGraph {
 
   private final SimpleLoop         root;
-  private final Vector<SimpleLoop> loops;
+  private final List<SimpleLoop> loops;
   private int                      loopCounter;
 
   LoopStructureGraph() {
     loopCounter = 0;
-    loops = new Vector<>();
+    loops = new ArrayList<>();
     root = new SimpleLoop(null, true);
     root.setNestingLevel(0);
     root.setCounter(loopCounter);
     loopCounter += 1;
-    loops.append(root);
+    loops.add(root);
   }
 
   public SimpleLoop createNewLoop(final BasicBlock bb, final boolean isReducible) {
     SimpleLoop loop = new SimpleLoop(bb, isReducible);
     loop.setCounter(loopCounter);
     loopCounter += 1;
-    loops.append(loop);
+    loops.add(loop);
     return loop;
   }
 
   public void calculateNestingLevel() {
     // link up all 1st level loops to artificial root node.
-    loops.forEach(liter -> {
-      if (!liter.isRoot()) {
-        if (liter.getParent() == null) {
-          liter.setParent(root);
-        }
+    for (SimpleLoop liter : loops) {
+      if (!liter.isRoot() && liter.getParent() == null) {
+        liter.setParent(root);
       }
-    });
+    }
 
     // recursively traverse the tree and assign levels.
     calculateNestingLevelRec(root, 0);
@@ -72,12 +73,14 @@ final class LoopStructureGraph {
 
   private void calculateNestingLevelRec(final SimpleLoop loop, final int depth) {
     loop.setDepthLevel(depth);
-    loop.getChildren().forEach(liter -> {
-      calculateNestingLevelRec(liter, depth + 1);
 
-      loop.setNestingLevel(Math.max(loop.getNestingLevel(),
-                                    1 + liter.getNestingLevel()));
-    });
+    for (SimpleLoop childLoop : loop.getChildren()) {
+      calculateNestingLevelRec(childLoop, depth + 1);
+
+      loop.setNestingLevel(Math.max(
+          loop.getNestingLevel(),
+          1 + childLoop.getNestingLevel()));
+    }
   }
 
   public int getNumLoops() {

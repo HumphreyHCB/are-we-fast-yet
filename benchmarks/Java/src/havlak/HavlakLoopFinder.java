@@ -13,9 +13,12 @@
 // limitations under the License.
 package havlak;
 
-import som.IdentityDictionary;
-import som.Set;
-import som.Vector;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * The Havlak loop finding algorithm.
@@ -35,9 +38,9 @@ final class HavlakLoopFinder {
   // Safeguard against pathological algorithm behavior.
   private static final int MAXNONBACKPREDS = (32 * 1024);
 
-  private final Vector<Set<Integer>>  nonBackPreds = new Vector<Set<Integer>>();
-  private final Vector<Vector<Integer>> backPreds  = new Vector<>();
-  private final IdentityDictionary<BasicBlock, Integer> number = new IdentityDictionary<>();
+  private final List<Set<Integer>> nonBackPreds = new ArrayList<>();
+  private final List<List<Integer>> backPreds = new ArrayList<>();
+  private final Map<BasicBlock, Integer> number = new HashMap<>();
   private int                      maxSize = 0;
   private int[]                    header;
   private BasicBlockClass[]        type;
@@ -87,14 +90,13 @@ final class HavlakLoopFinder {
   //
   private int doDFS(final BasicBlock currentNode, final int current) {
     nodes[current].initNode(currentNode, current);
-    number.atPut(currentNode, current);
+    number.put(currentNode, current);
 
     int lastId = current;
-    Vector<BasicBlock> outerBlocks = currentNode.getOutEdges();
+    List<BasicBlock> outerBlocks = currentNode.getOutEdges();
 
-    for (int i = 0; i < outerBlocks.size(); i++) {
-      BasicBlock target = outerBlocks.at(i);
-      if (number.at(target) == UNVISITED) {
+    for (BasicBlock target : outerBlocks) {
+      if (number.getOrDefault(target, UNVISITED) == UNVISITED) {
         lastId = doDFS(target, lastId + 1);
       }
     }
@@ -109,9 +111,9 @@ final class HavlakLoopFinder {
     //   - depth-first traversal and numbering.
     //   - unreached BB's are marked as dead.
     //
-    cfg.getBasicBlocks().forEach(
-        bb -> number.atPut(bb, UNVISITED));
-
+    for (BasicBlock bb : cfg.getBasicBlocks()) {
+      number.put(bb, UNVISITED);
+    }
     doDFS(cfg.getStartBasicBlock(), 0);
   }
 
@@ -140,17 +142,15 @@ final class HavlakLoopFinder {
   }
 
   private void processEdges(final BasicBlock nodeW, final int w) {
-    if (nodeW.getNumPred() > 0) {
-      nodeW.getInEdges().forEach(nodeV -> {
-        int v = number.at(nodeV);
-        if (v != UNVISITED) {
-          if (isAncestor(w, v)) {
-            backPreds.at(w).append(v);
-          } else {
-            nonBackPreds.at(w).add(v);
-          }
+    for (BasicBlock nodeV : nodeW.getInEdges()) {
+      int v = number.getOrDefault(nodeV, UNVISITED);
+      if (v != UNVISITED) {
+        if (isAncestor(w, v)) {
+          backPreds.get(w).add(v);
+        } else {
+          nonBackPreds.get(w).add(v);
         }
-      });
+      }
     }
   }
 
@@ -169,9 +169,10 @@ final class HavlakLoopFinder {
 
     int size = cfg.getNumNodes();
 
-    nonBackPreds.removeAll();
-    backPreds.removeAll();
-    number.removeAll();
+    nonBackPreds.clear();
+    backPreds.clear();
+    number.clear();
+
     if (size > maxSize) {
       header = new int[size];
       type = new BasicBlockClass[size];
@@ -181,8 +182,8 @@ final class HavlakLoopFinder {
     }
 
     for (int i = 0; i < size; ++i) {
-      nonBackPreds.append(new Set<>());
-      backPreds.append(new Vector<>());
+      nonBackPreds.add(new HashSet<>());
+      backPreds.add(new ArrayList<>());
       nodes[i] = new UnionFindNode();
     }
 
@@ -206,26 +207,23 @@ final class HavlakLoopFinder {
     //
     for (int w = size - 1; w >= 0; w--) {
       // this is 'P' in Havlak's paper
-      Vector<UnionFindNode> nodePool = new Vector<>();
-
+      List<UnionFindNode> nodePool = new ArrayList<>();
       BasicBlock nodeW = nodes[w].getBb();
       if (nodeW != null) {
         stepD(w, nodePool);
 
+        List<UnionFindNode> workList = new ArrayList<>(nodePool);
         // Copy nodePool to workList.
         //
-        Vector<UnionFindNode> workList = new Vector<>();
-        nodePool.forEach(niter -> workList.append(niter));
 
-        if (nodePool.size() != 0) {
+        if (!nodePool.isEmpty()) {
           type[w] = BasicBlockClass.BB_REDUCIBLE;
         }
 
         // work the list...
         //
         while (!workList.isEmpty()) {
-          UnionFindNode x = workList.removeFirst();
-
+          UnionFindNode x = workList.remove(0);
           // Step e:
           //
           // Step e represents the main difference from Tarjan's method.
@@ -238,17 +236,18 @@ final class HavlakLoopFinder {
           // The algorithm has degenerated. Break and
           // return in this case.
           //
-          int nonBackSize = nonBackPreds.at(x.getDfsNumber()).size();
+          int nonBackSize = nonBackPreds.get(x.getDfsNumber()).size();
           if (nonBackSize > MAXNONBACKPREDS) {
             return;
           }
+
           stepEProcessNonBackPreds(w, nodePool, workList, x);
         }
 
         // Collapse/Unionize nodes in a SCC to a single node
         // For every SCC found, create a loop descriptor and link it in.
         //
-        if ((nodePool.size() > 0) || (type[w] == BasicBlockClass.BB_SELF)) {
+        if (!nodePool.isEmpty() || type[w] == BasicBlockClass.BB_SELF) {
           SimpleLoop loop = lsg.createNewLoop(nodeW, type[w] != BasicBlockClass.BB_IRREDUCIBLE);
           setLoopAttributes(w, nodePool, loop);
         }
@@ -256,28 +255,25 @@ final class HavlakLoopFinder {
     }  // Step c
   }  // findLoops
 
-  private void stepEProcessNonBackPreds(final int w, final Vector<UnionFindNode> nodePool,
-      final Vector<UnionFindNode> workList, final UnionFindNode x) {
-    nonBackPreds.at(x.getDfsNumber()).forEach(iter -> {
+  private void stepEProcessNonBackPreds(final int w, final List<UnionFindNode> nodePool,
+      final List<UnionFindNode> workList, final UnionFindNode x) {
+    for (Integer iter : nonBackPreds.get(x.getDfsNumber())) {
       UnionFindNode y = nodes[iter];
       UnionFindNode ydash = y.findSet();
 
       if (!isAncestor(w, ydash.getDfsNumber())) {
         type[w] = BasicBlockClass.BB_IRREDUCIBLE;
-        nonBackPreds.at(w).add(ydash.getDfsNumber());
+        nonBackPreds.get(w).add(ydash.getDfsNumber());
       } else {
-        if (ydash.getDfsNumber() != w) {
-          if (!nodePool.hasSome(e -> e == ydash)) {
-            workList.append(ydash);
-            nodePool.append(ydash);
-          }
+        if (ydash.getDfsNumber() != w && !nodePool.contains(ydash)) {
+          workList.add(ydash);
+          nodePool.add(ydash);
         }
       }
-    });
+    }
   }
 
-  private void setLoopAttributes(final int w, final Vector<UnionFindNode> nodePool,
-      final SimpleLoop loop) {
+  private void setLoopAttributes(final int w, final List<UnionFindNode> nodePool, final SimpleLoop loop) {
     // At this point, one can set attributes to the loop, such as:
     //
     // the bottom node:
@@ -290,29 +286,26 @@ final class HavlakLoopFinder {
     // whether this loop is reducible:
     //    type[w] != BasicBlockClass.BB_IRREDUCIBLE
     //
-    nodes[w].setLoop(loop);
-
-    nodePool.forEach(node -> {
-      // Add nodes to loop descriptor.
+    for (UnionFindNode node : nodePool) {
+      
       header[node.getDfsNumber()] = w;
       node.union(nodes[w]);
 
-      // Nested loops are not added, but linked together.
       if (node.getLoop() != null) {
         node.getLoop().setParent(loop);
       } else {
         loop.addNode(node.getBb());
       }
-    });
+    }
   }
 
-  private void stepD(final int w, final Vector<UnionFindNode> nodePool) {
-    backPreds.at(w).forEach(v -> {
+  private void stepD(final int w, final List<UnionFindNode> nodePool) {
+    for (Integer v : backPreds.get(w)) {
       if (v != w) {
-        nodePool.append(nodes[v].findSet());
+        nodePool.add(nodes[v].findSet());
       } else {
         type[w] = BasicBlockClass.BB_SELF;
       }
-    });
+    }
   }
 }

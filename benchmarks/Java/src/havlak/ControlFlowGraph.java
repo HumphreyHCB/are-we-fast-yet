@@ -13,7 +13,6 @@
 // limitations under the License.
 package havlak;
 
-import som.Vector;
 
 
 /**
@@ -25,25 +24,30 @@ import som.Vector;
  *
  * @author rhundt
  */
+import java.util.ArrayList;
+import java.util.List;
 final class ControlFlowGraph {
 
-  private final Vector<BasicBlock>  basicBlockMap;
-  private BasicBlock                startNode;
-  private final Vector<BasicBlockEdge> edgeList;
+  private final List<BasicBlock> basicBlockMap;
+  private BasicBlock startNode;
+  private final List<BasicBlockEdge> edgeList;
 
   ControlFlowGraph() {
     startNode = null;
-    basicBlockMap = new Vector<>();
-    edgeList = new Vector<>();
+    basicBlockMap = new ArrayList<>();
+    edgeList = new ArrayList<>();
   }
 
   public BasicBlock createNode(final int name) {
     BasicBlock node;
-    if (basicBlockMap.at(name) != null) {
-      node = basicBlockMap.at(name);
+    while (name >= basicBlockMap.size()) {
+      basicBlockMap.add(null); // Extend list with nulls if index is out of bounds
+    }
+    if (basicBlockMap.get(name) != null) {
+      node = basicBlockMap.get(name);
     } else {
       node = new BasicBlock(name);
-      basicBlockMap.atPut(name, node);
+      basicBlockMap.set(name, node);
     }
 
     if (getNumNodes() == 1) {
@@ -53,7 +57,7 @@ final class ControlFlowGraph {
   }
 
   public void addEdge(final BasicBlockEdge edge) {
-    edgeList.append(edge);
+    edgeList.add(edge);
   }
 
   public int getNumNodes() {
@@ -64,7 +68,7 @@ final class ControlFlowGraph {
     return startNode;
   }
 
-  public Vector<BasicBlock> getBasicBlocks() {
+  public List<BasicBlock> getBasicBlocks() {
     return basicBlockMap;
   }
 }

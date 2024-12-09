@@ -8,8 +8,28 @@
  */
 package richards;
 
+public class ProcessFunction {
 
-@FunctionalInterface
-public interface ProcessFunction {
-  TaskControlBlock apply(Packet work, RBObject word);
+    // The apply method that processes the packet and returns a TaskControlBlock
+    public TaskControlBlock apply(Packet work, RBObject word) {
+        // Logic for processing the packet
+        if (work == null) {
+            // No work to process, return a special NO_TASK or similar object
+            return RBObject.NO_TASK;
+        }
+
+        // Example logic: Create a new TaskControlBlock based on the packet and word
+        TaskControlBlock resultTask = new TaskControlBlock(
+            null,  // no previous link
+            work.getIdentity(),
+            work.getKind(),
+            work,
+            new TaskState(), // Assuming new task state created here
+            this,            // Use the current ProcessFunction object
+            word
+        );
+
+        // Additional processing logic as needed
+        return resultTask;
+    }
 }

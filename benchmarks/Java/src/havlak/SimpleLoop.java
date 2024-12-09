@@ -23,7 +23,8 @@
  */
 package havlak;
 
-import som.IdentitySet;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * class SimpleLoop
@@ -38,8 +39,8 @@ import som.IdentitySet;
  */
 final class SimpleLoop {
 
-  private final IdentitySet<BasicBlock> basicBlocks;
-  private final IdentitySet<SimpleLoop> children;
+  private final Set<BasicBlock> basicBlocks; // Replaced IdentitySet with HashSet
+  private final Set<SimpleLoop> children;   // Replaced IdentitySet with HashSet
   private SimpleLoop            parent;
 
   @SuppressWarnings("unused") private final BasicBlock header;
@@ -51,15 +52,14 @@ final class SimpleLoop {
   @SuppressWarnings("unused") private int counter;
   @SuppressWarnings("unused") private int depthLevel;
 
-
   SimpleLoop(final BasicBlock bb, final boolean isReducible) {
     this.isReducible = isReducible;
     parent = null;
     isRoot = false;
     nestingLevel = 0;
     depthLevel   = 0;
-    basicBlocks  = new IdentitySet<>();
-    children     = new IdentitySet<>();
+    this.basicBlocks = new HashSet<>();
+    this.children = new HashSet<>();
 
     if (bb != null) {
       basicBlocks.add(bb);
@@ -76,8 +76,8 @@ final class SimpleLoop {
   }
 
   // Getters/Setters
-  public IdentitySet<SimpleLoop> getChildren() {
-    return children;
+  public Set<SimpleLoop> getChildren() {
+    return children; // Now returns an Iterable Set
   }
 
   public SimpleLoop getParent() {
