@@ -16,6 +16,9 @@ package havlak;
 import java.util.ArrayList;
 import java.util.List;
 
+import som.Dictionary.CustomHash;
+import som.Vector;
+
 /**
  * A simple class simulating the concept of Basic Blocks
  *
@@ -24,23 +27,23 @@ import java.util.List;
  *
  * @author rhundt
  */
-final class BasicBlock {
+final class BasicBlock implements CustomHash{
 
-  private final List<BasicBlock> inEdges;  // Replaced Vector with ArrayList
-  private final List<BasicBlock> outEdges; // Replaced Vector with ArrayList
+  private final Vector<BasicBlock> inEdges;  // Replaced Vector with ArrayList
+  private final Vector<BasicBlock> outEdges; // Replaced Vector with ArrayList
   private final int name;
 
   BasicBlock(final int name) {
     this.name = name;
-    inEdges   = new ArrayList<>(2); // Initialize with a capacity of 2
-    outEdges  = new ArrayList<>(2); // Initialize with a capacity of 2
+    inEdges   = new Vector<BasicBlock>(2); // Initialize with a capacity of 2
+    outEdges  = new Vector<BasicBlock>(2); // Initialize with a capacity of 2
   }
 
-  public List<BasicBlock> getInEdges() {
+  public Vector<BasicBlock> getInEdges() {
     return inEdges;
   }
 
-  public List<BasicBlock> getOutEdges() {
+  public Vector<BasicBlock> getOutEdges() {
     return outEdges;
   }
 
@@ -49,11 +52,11 @@ final class BasicBlock {
   }
 
   public void addOutEdge(final BasicBlock to) {
-    outEdges.add(to); // Use add() instead of append()
+    outEdges.append(to); // Use add() instead of append()
   }
 
   public void addInEdge(final BasicBlock from) {
-    inEdges.add(from); // Use add() instead of append()
+    inEdges.append(from); // Use add() instead of append()
   }
 
   public int getName() {
@@ -61,7 +64,7 @@ final class BasicBlock {
   }
 
   @Override
-  public int hashCode() {
+  public int customHash() {
     return name; // Custom hash remains the same
   }
 }
