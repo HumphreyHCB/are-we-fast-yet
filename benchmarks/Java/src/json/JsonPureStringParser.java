@@ -171,8 +171,8 @@ public final class JsonPureStringParser {
   private String readStringInternal() {
     read();
     startCapture();
-    while (!current.equals("\"")) {
-      if (current.equals("\\")) {
+    while (!"\"".equals(current)) {
+      if ("\\".equals(current)) {
         pauseCapture();
         readEscape();
         startCapture();
@@ -221,10 +221,8 @@ public final class JsonPureStringParser {
     if (!readDigit()) {
       throw expected("digit");
     }
-    if (!firstDigit.equals("0")) {
-      // Checkstyle: stop
+    if (!"0".equals(firstDigit)) {
       while (readDigit()) { }
-     // Checkstyle: resume
     }
     readFraction();
     readExponent();
@@ -238,9 +236,7 @@ public final class JsonPureStringParser {
     if (!readDigit()) {
       throw expected("digit");
     }
-    // Checkstyle: stop
     while (readDigit()) { }
-    // Checkstyle: resume
     return true;
   }
 
@@ -254,15 +250,12 @@ public final class JsonPureStringParser {
     if (!readDigit()) {
       throw expected("digit");
     }
-
-    // Checkstyle: stop
     while (readDigit()) { }
-    // Checkstyle: resume
     return true;
   }
 
   private boolean readChar(final String ch) {
-    if (!current.equals(ch)) {
+    if (!ch.equals(current)) {
       return false;
     }
     read();
@@ -290,7 +283,7 @@ public final class JsonPureStringParser {
     }
     index++;
     if (index < input.length()) {
-      current = input.substring(index, index + 1);
+      current = Character.toString(input.charAt(index));
     } else {
       current = null;
     }
@@ -302,7 +295,7 @@ public final class JsonPureStringParser {
 
   private void pauseCapture() {
     int end = current == null ? index : index - 1;
-    captureBuffer += input.substring(captureStart, end + 1);
+    captureBuffer += subStringFromTo(captureStart, end);
     captureStart = -1;
   }
 
@@ -310,9 +303,9 @@ public final class JsonPureStringParser {
     int end = current == null ? index : index - 1;
     String captured;
     if ("".equals(captureBuffer)) {
-      captured = input.substring(captureStart, end + 1);
+      captured = subStringFromTo(captureStart, end);
     } else {
-      captureBuffer += input.substring(captureStart, end + 1);
+      captureBuffer += subStringFromTo(captureStart, end);
       captured = captureBuffer;
       captureBuffer = "";
     }
@@ -350,5 +343,14 @@ public final class JsonPureStringParser {
 
   private boolean isEndOfText() {
     return current == null;
+  }
+
+  // Helper method to replace substring usage
+  private String subStringFromTo(int start, int end) {
+    StringBuilder sb = new StringBuilder(end - start + 1);
+    for (int i = start; i <= end; i++) {
+      sb.append(input.charAt(i));
+    }
+    return sb.toString();
   }
 }
