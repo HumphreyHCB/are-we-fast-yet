@@ -13,12 +13,10 @@
 // limitations under the License.
 package havlak;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import som.ForEachInterface;
+import som.IdentityDictionary;
+import som.Set;
+import som.Vector;
 
 /**
  * The Havlak loop finding algorithm.
@@ -33,279 +31,390 @@ final class HavlakLoopFinder {
   private final LoopStructureGraph lsg;      // Loop Structure Graph
 
   // Marker for uninitialized nodes.
-  private static final int UNVISITED = Integer.MAX_VALUE;
-
-  // Safeguard against pathological algorithm behavior.
-  private static final int MAXNONBACKPREDS = (32 * 1024);
-
-  private final List<Set<Integer>> nonBackPreds = new ArrayList<>();
-  private final List<List<Integer>> backPreds = new ArrayList<>();
-  private final Map<BasicBlock, Integer> number = new HashMap<>();
-  private int                      maxSize = 0;
-  private int[]                    header;
-  private BasicBlockClass[]        type;
-  private int[]                    last;
-  private UnionFindNode[]          nodes;
-
-  HavlakLoopFinder(final ControlFlowGraph cfg, final LoopStructureGraph lsg) {
-    this.cfg = cfg;
-    this.lsg = lsg;
-  }
-
-  /**
-   * enum BasicBlockClass
-   *
-   * Basic Blocks and Loops are being classified as regular, irreducible,
-   * and so on. This enum contains a symbolic name for all these classifications
-   */
-  private enum BasicBlockClass {
-    BB_TOP,          // uninitialized
-    BB_NONHEADER,    // a regular BB
-    BB_REDUCIBLE,    // reducible loop
-    BB_SELF,         // single BB loop
-    BB_IRREDUCIBLE,  // irreducible loop
-    BB_DEAD,         // a dead BB
-    BB_LAST          // Sentinel
-  }
-
-  //
-  // IsAncestor
-  //
-  // As described in the paper, determine whether a node 'w' is a
-  // "true" ancestor for node 'v'.
-  //
-  // Dominance can be tested quickly using a pre-order trick
-  // for depth-first spanning trees. This is why DFS is the first
-  // thing we run below.
-  //
-  private boolean isAncestor(final int w, final int v) {
-    return w <= v && v <= last[w];
-  }
-
-  //
-  // DFS - Depth-First-Search
-  //
-  // DESCRIPTION:
-  // Simple depth first traversal along out edges with node numbering.
-  //
-  private int doDFS(final BasicBlock currentNode, final int current) {
-    nodes[current].initNode(currentNode, current);
-    number.put(currentNode, current);
-
-    int lastId = current;
-    List<BasicBlock> outerBlocks = currentNode.getOutEdges();
-
-    for (BasicBlock target : outerBlocks) {
-      if (number.getOrDefault(target, UNVISITED) == UNVISITED) {
-        lastId = doDFS(target, lastId + 1);
+  static final int UNVISITED = Integer.MAX_VALUE;
+  
+    // Safeguard against pathological algorithm behavior.
+    private static final int MAXNONBACKPREDS = (32 * 1024);
+  
+    private final Vector<Set<Integer>>  nonBackPreds = new Vector<Set<Integer>>();
+    private final Vector<Vector<Integer>> backPreds  = new Vector<>();
+    private final IdentityDictionary<BasicBlock, Integer> number = new IdentityDictionary<>();
+    private int                      maxSize = 0;
+    private int[]                    header;
+    private BasicBlockClass[]        type;
+    private int[]                    last;
+    private UnionFindNode[]          nodes;
+  
+    HavlakLoopFinder(final ControlFlowGraph cfg, final LoopStructureGraph lsg) {
+      this.cfg = cfg;
+      this.lsg = lsg;
+    }
+  
+    /**
+     * enum BasicBlockClass
+     *
+     * Basic Blocks and Loops are being classified as regular, irreducible,
+     * and so on. This enum contains a symbolic name for all these classifications
+     */
+    public enum BasicBlockClass {
+      BB_TOP,          // uninitialized
+      BB_NONHEADER,    // a regular BB
+      BB_REDUCIBLE,    // reducible loop
+      BB_SELF,         // single BB loop
+      BB_IRREDUCIBLE,  // irreducible loop
+      BB_DEAD,         // a dead BB
+      BB_LAST          // Sentinel
+    }
+  
+    //
+    // IsAncestor
+    //
+    // As described in the paper, determine whether a node 'w' is a
+    // "true" ancestor for node 'v'.
+    //
+    // Dominance can be tested quickly using a pre-order trick
+    // for depth-first spanning trees. This is why DFS is the first
+    // thing we run below.
+    //
+    public boolean isAncestor(final int w, final int v) {
+      return w <= v && v <= last[w];
+    }
+  
+    //
+    // DFS - Depth-First-Search
+    //
+    // DESCRIPTION:
+    // Simple depth first traversal along out edges with node numbering.
+    //
+    private int doDFS(final BasicBlock currentNode, final int current) {
+      nodes[current].initNode(currentNode, current);
+      number.atPut(currentNode, current);
+  
+      int lastId = current;
+      Vector<BasicBlock> outerBlocks = currentNode.getOutEdges();
+  
+      for (int i = 0; i < outerBlocks.size(); i++) {
+        BasicBlock target = outerBlocks.at(i);
+        if (number.at(target) == UNVISITED) {
+          lastId = doDFS(target, lastId + 1);
+        }
       }
+  
+      last[current] = lastId;
+      return lastId;
     }
-
-    last[current] = lastId;
-    return lastId;
-  }
-
-  private void initAllNodes() {
-    // Step a:
-    //   - initialize all nodes as unvisited.
-    //   - depth-first traversal and numbering.
-    //   - unreached BB's are marked as dead.
-    //
-    for (BasicBlock bb : cfg.getBasicBlocks()) {
-      number.put(bb, UNVISITED);
+  
+    private void initAllNodes() {
+      // Step a:
+      //   - initialize all nodes as unvisited.
+      //   - depth-first traversal and numbering.
+      //   - unreached BB's are marked as dead.
+      //
+  
+      // Needs to change
+      cfg.getBasicBlocks().forEach(
+          bb -> number.atPut(bb, UNVISITED));
+  
+      doDFS(cfg.getStartBasicBlock(), 0);
     }
-    doDFS(cfg.getStartBasicBlock(), 0);
-  }
-
-  private void identifyEdges(final int size) {
-    // Step b:
-    //   - iterate over all nodes.
-    //
-    //   A backedge comes from a descendant in the DFS tree, and non-backedges
-    //   from non-descendants (following Tarjan).
-    //
-    //   - check incoming edges 'v' and add them to either
-    //     - the list of backedges (backPreds) or
-    //     - the list of non-backedges (nonBackPreds)
-    //
-    for (int w = 0; w < size; w++) {
-      header[w] = 0;
-      type[w] = BasicBlockClass.BB_NONHEADER;
-
-      BasicBlock nodeW = nodes[w].getBb();
-      if (nodeW == null) {
-        type[w] = BasicBlockClass.BB_DEAD;
-      } else {
-        processEdges(nodeW, w);
-      }
-    }
-  }
-
-  private void processEdges(final BasicBlock nodeW, final int w) {
-    for (BasicBlock nodeV : nodeW.getInEdges()) {
-      int v = number.getOrDefault(nodeV, UNVISITED);
-      if (v != UNVISITED) {
-        if (isAncestor(w, v)) {
-          backPreds.get(w).add(v);
+  
+    private void identifyEdges(final int size) {
+      // Step b:
+      //   - iterate over all nodes.
+      //
+      //   A backedge comes from a descendant in the DFS tree, and non-backedges
+      //   from non-descendants (following Tarjan).
+      //
+      //   - check incoming edges 'v' and add them to either
+      //     - the list of backedges (backPreds) or
+      //     - the list of non-backedges (nonBackPreds)
+      //
+      for (int w = 0; w < size; w++) {
+        header[w] = 0;
+        type[w] = BasicBlockClass.BB_NONHEADER;
+  
+        BasicBlock nodeW = nodes[w].getBb();
+        if (nodeW == null) {
+          type[w] = BasicBlockClass.BB_DEAD;
         } else {
-          nonBackPreds.get(w).add(v);
+          processEdges(nodeW, w);
         }
       }
     }
-  }
-
-  //
-  // findLoops
-  //
-  // Find loops and build loop forest using Havlak's algorithm, which
-  // is derived from Tarjan. Variable names and step numbering has
-  // been chosen to be identical to the nomenclature in Havlak's
-  // paper (which, in turn, is similar to the one used by Tarjan).
-  //
-  public void findLoops() {
-    if (cfg.getStartBasicBlock() == null) {
-      return;
+  
+    private void processEdges(final BasicBlock nodeW, final int w) {
+      if (nodeW.getNumPred() > 0) {
+        nodeW.getInEdges().forEach(new ProcessEdgesTask(w, number, backPreds, nonBackPreds, this));
+      }
     }
-
-    int size = cfg.getNumNodes();
-
-    nonBackPreds.clear();
-    backPreds.clear();
-    number.clear();
-
-    if (size > maxSize) {
-      header = new int[size];
-      type = new BasicBlockClass[size];
-      last = new int[size];
-      nodes = new UnionFindNode[size];
-      maxSize = size;
-    }
-
-    for (int i = 0; i < size; ++i) {
-      nonBackPreds.add(new HashSet<>());
-      backPreds.add(new ArrayList<>());
-      nodes[i] = new UnionFindNode();
-    }
-
-    initAllNodes();
-    identifyEdges(size);
-
-    // Start node is root of all other loops.
-    header[0] = 0;
-
-    // Step c:
+  
+  
     //
-    // The outer loop, unchanged from Tarjan. It does nothing except
-    // for those nodes which are the destinations of backedges.
-    // For a header node w, we chase backward from the sources of the
-    // backedges adding nodes to the set P, representing the body of
-    // the loop headed by w.
+    // findLoops
     //
-    // By running through the nodes in reverse of the DFST preorder,
-    // we ensure that inner loop headers will be processed before the
-    // headers for surrounding loops.
+    // Find loops and build loop forest using Havlak's algorithm, which
+    // is derived from Tarjan. Variable names and step numbering has
+    // been chosen to be identical to the nomenclature in Havlak's
+    // paper (which, in turn, is similar to the one used by Tarjan).
     //
-    for (int w = size - 1; w >= 0; w--) {
-      // this is 'P' in Havlak's paper
-      List<UnionFindNode> nodePool = new ArrayList<>();
-      BasicBlock nodeW = nodes[w].getBb();
-      if (nodeW != null) {
-        stepD(w, nodePool);
-
-        List<UnionFindNode> workList = new ArrayList<>(nodePool);
-        // Copy nodePool to workList.
-        //
-
-        if (!nodePool.isEmpty()) {
-          type[w] = BasicBlockClass.BB_REDUCIBLE;
-        }
-
-        // work the list...
-        //
-        while (!workList.isEmpty()) {
-          UnionFindNode x = workList.remove(0);
-          // Step e:
+    public void findLoops() {
+      if (cfg.getStartBasicBlock() == null) {
+        return;
+      }
+  
+      int size = cfg.getNumNodes();
+  
+      nonBackPreds.removeAll();
+      backPreds.removeAll();
+      number.removeAll();
+      if (size > maxSize) {
+        header = new int[size];
+        type = new BasicBlockClass[size];
+        last = new int[size];
+        nodes = new UnionFindNode[size];
+        maxSize = size;
+      }
+  
+      for (int i = 0; i < size; ++i) {
+        nonBackPreds.append(new Set<>());
+        backPreds.append(new Vector<>());
+        nodes[i] = new UnionFindNode();
+      }
+  
+      initAllNodes();
+      identifyEdges(size);
+  
+      // Start node is root of all other loops.
+      header[0] = 0;
+  
+      // Step c:
+      //
+      // The outer loop, unchanged from Tarjan. It does nothing except
+      // for those nodes which are the destinations of backedges.
+      // For a header node w, we chase backward from the sources of the
+      // backedges adding nodes to the set P, representing the body of
+      // the loop headed by w.
+      //
+      // By running through the nodes in reverse of the DFST preorder,
+      // we ensure that inner loop headers will be processed before the
+      // headers for surrounding loops.
+      //
+      for (int w = size - 1; w >= 0; w--) {
+        // this is 'P' in Havlak's paper
+        Vector<UnionFindNode> nodePool = new Vector<>();
+  
+        BasicBlock nodeW = nodes[w].getBb();
+        if (nodeW != null) {
+          stepD(w, nodePool);
+  
+          // Copy nodePool to workList.
           //
-          // Step e represents the main difference from Tarjan's method.
-          // Chasing upwards from the sources of a node w's backedges. If
-          // there is a node y' that is not a descendant of w, w is marked
-          // the header of an irreducible loop, there is another entry
-          // into this loop that avoids w.
-          //
-
-          // The algorithm has degenerated. Break and
-          // return in this case.
-          //
-          int nonBackSize = nonBackPreds.get(x.getDfsNumber()).size();
-          if (nonBackSize > MAXNONBACKPREDS) {
-            return;
+          Vector<UnionFindNode> workList = new Vector<>();
+              // Needs to change
+          nodePool.forEach(new AssignNodePoolTask(workList));
+  
+          if (nodePool.size() != 0) {
+            type[w] = BasicBlockClass.BB_REDUCIBLE;
           }
-
-          stepEProcessNonBackPreds(w, nodePool, workList, x);
+  
+          // work the list...
+          //
+          while (!workList.isEmpty()) {
+            UnionFindNode x = workList.removeFirst();
+  
+            // Step e:
+            //
+            // Step e represents the main difference from Tarjan's method.
+            // Chasing upwards from the sources of a node w's backedges. If
+            // there is a node y' that is not a descendant of w, w is marked
+            // the header of an irreducible loop, there is another entry
+            // into this loop that avoids w.
+            //
+  
+            // The algorithm has degenerated. Break and
+            // return in this case.
+            //
+            int nonBackSize = nonBackPreds.at(x.getDfsNumber()).size();
+            if (nonBackSize > MAXNONBACKPREDS) {
+              return;
+            }
+            stepEProcessNonBackPreds(w, nodePool, workList, x);
+          }
+  
+          // Collapse/Unionize nodes in a SCC to a single node
+          // For every SCC found, create a loop descriptor and link it in.
+          //
+          if ((nodePool.size() > 0) || (type[w] == BasicBlockClass.BB_SELF)) {
+            SimpleLoop loop = lsg.createNewLoop(nodeW, type[w] != BasicBlockClass.BB_IRREDUCIBLE);
+            setLoopAttributes(w, nodePool, loop);
+          }
         }
-
-        // Collapse/Unionize nodes in a SCC to a single node
-        // For every SCC found, create a loop descriptor and link it in.
-        //
-        if (!nodePool.isEmpty() || type[w] == BasicBlockClass.BB_SELF) {
-          SimpleLoop loop = lsg.createNewLoop(nodeW, type[w] != BasicBlockClass.BB_IRREDUCIBLE);
-          setLoopAttributes(w, nodePool, loop);
-        }
-      }
-    }  // Step c
-  }  // findLoops
-
-  private void stepEProcessNonBackPreds(final int w, final List<UnionFindNode> nodePool,
-      final List<UnionFindNode> workList, final UnionFindNode x) {
-    for (Integer iter : nonBackPreds.get(x.getDfsNumber())) {
-      UnionFindNode y = nodes[iter];
-      UnionFindNode ydash = y.findSet();
-
-      if (!isAncestor(w, ydash.getDfsNumber())) {
-        type[w] = BasicBlockClass.BB_IRREDUCIBLE;
-        nonBackPreds.get(w).add(ydash.getDfsNumber());
-      } else {
-        if (ydash.getDfsNumber() != w && !nodePool.contains(ydash)) {
-          workList.add(ydash);
-          nodePool.add(ydash);
-        }
-      }
-    }
-  }
-
-  private void setLoopAttributes(final int w, final List<UnionFindNode> nodePool, final SimpleLoop loop) {
-    // At this point, one can set attributes to the loop, such as:
-    //
-    // the bottom node:
-    //    iter  = backPreds[w].begin();
-    //    loop bottom is: nodes[iter].node);
-    //
-    // the number of backedges:
-    //    backPreds[w].size()
-    //
-    // whether this loop is reducible:
-    //    type[w] != BasicBlockClass.BB_IRREDUCIBLE
-    //
-    for (UnionFindNode node : nodePool) {
+      }  // Step c
+    }  // findLoops
+  
+    private void stepEProcessNonBackPreds(final int w, final Vector<UnionFindNode> nodePool,
+        final Vector<UnionFindNode> workList, final UnionFindNode x) {
+          nonBackPreds.at(x.getDfsNumber())
+          .forEach(new StepEProcessTask(w, nodePool, workList, nodes, type, nonBackPreds, this));
       
-      header[node.getDfsNumber()] = w;
-      node.union(nodes[w]);
-
-      if (node.getLoop() != null) {
-        node.getLoop().setParent(loop);
-      } else {
-        loop.addNode(node.getBb());
-      }
     }
+  
+  
+    private void setLoopAttributes(final int w, final Vector<UnionFindNode> nodePool,
+        final SimpleLoop loop) {
+      // At this point, one can set attributes to the loop, such as:
+      //
+      // the bottom node:
+      //    iter  = backPreds[w].begin();
+      //    loop bottom is: nodes[iter].node);
+      //
+      // the number of backedges:
+      //    backPreds[w].size()
+      //
+      // whether this loop is reducible:
+      //    type[w] != BasicBlockClass.BB_IRREDUCIBLE
+      //
+      nodes[w].setLoop(loop);
+  
+      // Replace lambda with anonymous implementation
+      nodePool.forEach(new SetLoopAttributesTask(w, loop, header, nodes));
+    }
+  
+    private void stepD(final int w, final Vector<UnionFindNode> nodePool) {
+      backPreds.at(w).forEach(new StepDTask(w, nodePool, nodes, type));
+    }
+  
   }
-
-  private void stepD(final int w, final List<UnionFindNode> nodePool) {
-    for (Integer v : backPreds.get(w)) {
-      if (v != w) {
-        nodePool.add(nodes[v].findSet());
+  
+  class ProcessEdgesTask implements ForEachInterface<BasicBlock> {
+    private final int w;
+    private final IdentityDictionary<BasicBlock, Integer> number;
+    private final Vector<Vector<Integer>> backPreds;
+    private final Vector<Set<Integer>> nonBackPreds;
+    private final HavlakLoopFinder finder;
+  
+    public ProcessEdgesTask(int w, IdentityDictionary<BasicBlock, Integer> number,
+                            Vector<Vector<Integer>> backPreds, Vector<Set<Integer>> nonBackPreds,
+                            HavlakLoopFinder finder) {
+      this.w = w;
+      this.number = number;
+      this.backPreds = backPreds;
+      this.nonBackPreds = nonBackPreds;
+      this.finder = finder;
+    }
+  
+    @Override
+    public void apply(BasicBlock nodeV) {
+      int v = number.at(nodeV);
+      if (v != HavlakLoopFinder.UNVISITED) {
+      if (finder.isAncestor(w, v)) {
+        backPreds.at(w).append(v);
       } else {
-        type[w] = BasicBlockClass.BB_SELF;
+        nonBackPreds.at(w).add(v);
       }
     }
   }
 }
+
+class StepDTask implements ForEachInterface<Integer> {
+  private final int w;
+  private final Vector<UnionFindNode> nodePool;
+  private final UnionFindNode[] nodes;
+  private final HavlakLoopFinder.BasicBlockClass[] type;
+
+  public StepDTask(int w, Vector<UnionFindNode> nodePool, UnionFindNode[] nodes, HavlakLoopFinder.BasicBlockClass[] type) {
+    this.w = w;
+    this.nodePool = nodePool;
+    this.nodes = nodes;
+    this.type = type;
+  }
+
+  @Override
+  public void apply(Integer v) {
+    if (v != w) {
+      nodePool.append(nodes[v].findSet());
+    } else {
+      type[w] = HavlakLoopFinder.BasicBlockClass.BB_SELF;
+    }
+  }
+}
+
+class StepEProcessTask implements ForEachInterface<Integer> {
+  private final int w;
+  private final Vector<UnionFindNode> nodePool;
+  private final Vector<UnionFindNode> workList;
+  private final UnionFindNode[] nodes;
+  private final HavlakLoopFinder.BasicBlockClass[] type;
+  private final Vector<Set<Integer>> nonBackPreds;
+  private final HavlakLoopFinder finder;
+
+  public StepEProcessTask(int w, Vector<UnionFindNode> nodePool, Vector<UnionFindNode> workList,
+                          UnionFindNode[] nodes, HavlakLoopFinder.BasicBlockClass[] type,
+                          Vector<Set<Integer>> nonBackPreds, HavlakLoopFinder finder) {
+    this.w = w;
+    this.nodePool = nodePool;
+    this.workList = workList;
+    this.nodes = nodes;
+    this.type = type;
+    this.nonBackPreds = nonBackPreds;
+    this.finder = finder;
+  }
+
+  @Override
+  public void apply(Integer iter) {
+    UnionFindNode y = nodes[iter];
+    UnionFindNode ydash = y.findSet();
+
+    if (!finder.isAncestor(w, ydash.getDfsNumber())) {
+      type[w] = HavlakLoopFinder.BasicBlockClass.BB_IRREDUCIBLE;
+      nonBackPreds.at(w).add(ydash.getDfsNumber());
+    } else {
+      if (ydash.getDfsNumber() != w) {
+        if (!nodePool.hasSome(e -> e == ydash)) {
+          workList.append(ydash);
+          nodePool.append(ydash);
+        }
+      }
+    }
+  }
+}
+
+class SetLoopAttributesTask implements ForEachInterface<UnionFindNode> {
+  private final int w;
+  private final SimpleLoop loop;
+  private final int[] header;
+  private final UnionFindNode[] nodes;
+
+  public SetLoopAttributesTask(int w, SimpleLoop loop, int[] header, UnionFindNode[] nodes) {
+    this.w = w;
+    this.loop = loop;
+    this.header = header;
+    this.nodes = nodes;
+  }
+
+  @Override
+  public void apply(UnionFindNode node) {
+    header[node.getDfsNumber()] = w;
+    node.union(nodes[w]);
+
+    if (node.getLoop() != null) {
+      node.getLoop().setParent(loop);
+    } else {
+      loop.addNode(node.getBb());
+    }
+  }
+}
+
+class AssignNodePoolTask implements ForEachInterface<UnionFindNode> {
+  private final Vector<UnionFindNode> workList;
+
+  public AssignNodePoolTask(Vector<UnionFindNode> workList) {
+    this.workList = workList;
+  }
+
+  @Override
+  public void apply(UnionFindNode node) {
+    workList.append(node);
+  }
+}
+

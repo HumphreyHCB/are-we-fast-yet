@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 package havlak;
-import java.lang.reflect.Array;
-import java.util.ArrayList;
-import java.util.List;
 
+import som.ForEachInterface;
 import som.Vector;
 
 /**
@@ -38,52 +36,81 @@ import som.Vector;
 final class LoopStructureGraph {
 
   private final SimpleLoop         root;
-  private final List<SimpleLoop> loops;
+  private final Vector<SimpleLoop> loops;
   private int                      loopCounter;
 
   LoopStructureGraph() {
     loopCounter = 0;
-    loops = new ArrayList<>();
+    loops = new Vector<>();
     root = new SimpleLoop(null, true);
     root.setNestingLevel(0);
     root.setCounter(loopCounter);
     loopCounter += 1;
-    loops.add(root);
+    loops.append(root);
   }
 
   public SimpleLoop createNewLoop(final BasicBlock bb, final boolean isReducible) {
     SimpleLoop loop = new SimpleLoop(bb, isReducible);
     loop.setCounter(loopCounter);
     loopCounter += 1;
-    loops.add(loop);
+    loops.append(loop);
     return loop;
   }
 
   public void calculateNestingLevel() {
-    // link up all 1st level loops to artificial root node.
-    for (SimpleLoop liter : loops) {
-      if (!liter.isRoot() && liter.getParent() == null) {
-        liter.setParent(root);
-      }
-    }
+    // Link up all 1st level loops to the artificial root node.
+    loops.forEach(new LinkFirstLevelLoopsTask(root));
+
 
     // recursively traverse the tree and assign levels.
     calculateNestingLevelRec(root, 0);
   }
 
-  private void calculateNestingLevelRec(final SimpleLoop loop, final int depth) {
+  public void calculateNestingLevelRec(final SimpleLoop loop, final int depth) {
     loop.setDepthLevel(depth);
-
-    for (SimpleLoop childLoop : loop.getChildren()) {
-      calculateNestingLevelRec(childLoop, depth + 1);
-
-      loop.setNestingLevel(Math.max(
-          loop.getNestingLevel(),
-          1 + childLoop.getNestingLevel()));
-    }
+    loop.getChildren().forEach(new AssignNestingLevelsTask(this, loop, depth));
   }
+
 
   public int getNumLoops() {
     return loops.size();
   }
 }
+
+class LinkFirstLevelLoopsTask implements ForEachInterface<SimpleLoop> {
+  private final SimpleLoop root;
+
+  public LinkFirstLevelLoopsTask(SimpleLoop root) {
+    this.root = root;
+  }
+
+  @Override
+  public void apply(SimpleLoop liter) {
+    if (!liter.isRoot()) {
+      if (liter.getParent() == null) {
+        liter.setParent(root);
+      }
+    }
+  }
+}
+
+class AssignNestingLevelsTask implements ForEachInterface<SimpleLoop> {
+  private final LoopStructureGraph graph;
+  private final SimpleLoop parentLoop;
+  private final int parentDepth;
+
+  public AssignNestingLevelsTask(LoopStructureGraph graph, SimpleLoop parentLoop, int parentDepth) {
+    this.graph = graph;
+    this.parentLoop = parentLoop;
+    this.parentDepth = parentDepth;
+  }
+
+  @Override
+  public void apply(SimpleLoop liter) {
+    graph.calculateNestingLevelRec(liter, parentDepth + 1);
+    parentLoop.setNestingLevel(
+        Math.max(parentLoop.getNestingLevel(), 1 + liter.getNestingLevel()));
+  }
+}
+
+
